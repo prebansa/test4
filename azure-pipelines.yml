@@ -1,0 +1,62 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+variables:
+  buildConfiguration: 'Release'
+  buildImageName: 'ubuntu-latest'
+  system.debug: true
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        pool: 
+          vmImage: $(buildImageName)
+        steps:
+          - task: DotNetCoreCLI@2
+            inputs:
+             command: 'build'
+             feedsToUse: select
+             vstsFeed: 'nuget-dev'
+             versioningScheme: off
+             configuration: $(buildConfiguration)
+             arguments: '/property:Configuration=$(buildConfiguration)'
+          - task: DotNetCoreCLI@2
+            inputs:
+             command: test
+             arguments: '--configuration $(buildConfiguration)'
+          - task: DotNetCoreCLI@2
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: 'HelloWorld/HelloWorld.csproj'
+          - task: CopyFiles@2
+            displayName: 'Copy Files to artifact staging directory'
+            inputs:
+              SourceFolder: '$(system.defaultworkingdirectory)'
+              Contents: '**/*.zip'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)'
+              flattenFolders: true
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)'
+              artifact: 'publish.zip'
+              publishLocation: 'pipeline'
+
+  - stage: Deploy
+    jobs:
+      - job: Deploy
+        pool: 
+           vmImage: 'ubuntu-latest'        
+        steps:
+          - checkout: none
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'current'
+              itemPattern: '*.zip'
+              targetPath: '$(Build.ArtifactStagingDirectory)'
